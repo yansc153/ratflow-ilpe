@@ -1,0 +1,14 @@
+services:
+  ratflow:
+    build: .
+    container_name: ratflow-ilpe
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: sqlite:///./data/ratflow.db
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped

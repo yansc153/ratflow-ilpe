@@ -1,0 +1,48 @@
+from typing import Dict, Any
+from app.agents.base import BaseAgent, AGENT_SYSTEM_PROMPT
+from app.services.deepseek_client import deepseek
+
+
+class MajorContractAgent(BaseAgent):
+    agent_name = "major_contract_agent"
+
+    async def run(self, case_data: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            alert = case_data.get("alert", {})
+            ticker = alert.get("ticker", "")
+            company = alert.get("company_name", ticker)
+
+            user_prompt = f"""Research whether {company} ({ticker}) may have a major customer contract, government order, defense award, cloud/enterprise deal, healthcare procurement, or supplier agreement pending.
+
+Check for public clues:
+- Government procurement records (SAM.gov, defense.gov, state procurement)
+- Press releases about new customers or partnerships
+- Customer pages showing new logos or enterprise clients
+- Partner pages showing expanded relationships
+- Job postings for delivery, implementation, federal sales, government relations roles
+- Backlog or order language in recent SEC filings
+- Supplier/customer announcements from related companies
+- Industry trade publications about contract awards
+- Conference presentations about pipeline or bookings
+- Revenue concentration disclosures in 10-K
+
+Return JSON:
+{{
+  "score": 0-100,
+  "confidence": "low|medium|high",
+  "summary": "string",
+  "positive_evidence": [],
+  "negative_evidence": [],
+  "uncertainties": [],
+  "errors": []
+}}
+
+Do not fabricate evidence. State limitations clearly if unable to access data."""
+
+            result = await deepseek.chat(system_prompt=AGENT_SYSTEM_PROMPT, user_prompt=user_prompt)
+            output = self.base_output(case_data.get("case_uid", "unknown"))
+            output.update({k: v for k, v in result.items() if k in output})
+            return output
+        except Exception as e:
+            self.logger.error("major_contract_failed", error=str(e))
+            return {"agent_name": self.agent_name, "error": str(e)}

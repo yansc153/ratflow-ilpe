@@ -1,0 +1,73 @@
+🐀 RATFLOW 老鼠仓嫌疑报告
+
+**Case:** {{ case_uid }}
+**Ticker:** {{ ticker }}
+**方向:** {{ direction_label }}
+**原单:** {{ original_contract_label }}
+
+**价格:**
+Bid: {{ bid }} | Ask: {{ ask }} | Mid: {{ mid }} | Last: {{ last }}
+IV: {{ iv }} | DTE: {{ dte }} | Premium: ${{ premium }}
+
+**期权结构:**
+Volume/OI: {{ volume }}/{{ open_interest }} = {{ volume_oi_ratio }}
+Options DNA Score: {{ options_dna_score }}/100
+Contract Quality: {{ contract_quality }}
+
+**总评分:**
+Leakage Score: {{ leakage_score }}/100
+Tradeability Score: {{ tradeability_score }}/100
+Model-Estimated Follow-Through Probability: {{ profit_probability }}%
+Calibration: {{ calibration_grade }} / {{ calibration_confidence }}
+
+**最可能事件:**
+- AI转型: {{ p_ai }}%
+- 被收购/战略交易: {{ p_ma }}%
+- 重大合同/政府订单: {{ p_contract }}%
+- 财报超预期/低预期: {{ p_earnings }}%
+- 监管/法律/专利/FDA: {{ p_regulatory }}%
+- 融资/稀释: {{ p_financing }}%
+- 散户/对冲/Gamma噪音: {{ p_noise }}%
+- 其他: {{ p_other }}%
+
+**为什么可疑:**
+{% for item in why_suspicious %}
+- {{ item }}
+{% endfor %}
+
+**公开证据:**
+{% for item in positive_evidence %}
+- [{{ item.quality }}] {{ item.title }}
+  Source: {{ item.source_name }}{% if item.url %} ({{ item.url }}){% endif %}
+  {{ item.snippet }}
+{% endfor %}
+
+**反证/噪音:**
+{% for item in negative_evidence %}
+- {{ item }}
+{% endfor %}
+
+**交易建议:**
+Action: {{ primary_action }}
+原单建议: {{ original_contract_trade }}
+替代方案: {{ alternative_contract_trade }}
+仓位: {{ position_size }}
+最大亏损: 权利金
+
+**止盈思路:**
+{% for item in take_profit_plan %}
+- {{ item }}
+{% endfor %}
+
+**失效条件:**
+{% for item in invalidation %}
+- {{ item }}
+{% endfor %}
+
+**下一步:**
+等待次日 OI confirmation。
+若 OI confirmation ratio > 50%，系统升级评分。
+若 OI 不确认，系统降级。
+
+**备注:**
+这是基于公开数据的概率化研究报告，不是投资建议，也不代表确认存在内幕交易。

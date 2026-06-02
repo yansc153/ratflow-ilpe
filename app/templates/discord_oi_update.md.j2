@@ -1,0 +1,24 @@
+🐀 RATFLOW OI确认更新
+
+**Case:** {{ case_uid }}
+**Ticker:** {{ ticker }}
+**合约:** {{ contract_label }}
+
+昨日 OI: {{ old_oi }}
+今日 OI: {{ new_oi }}
+昨日 Volume: {{ alert_day_volume }}
+OI Change: {{ oi_change }}
+OI Confirmation Ratio: {{ oi_confirmation_ratio }}%
+
+**评级变化:**
+Leakage Score: {{ old_score }} → {{ new_score }}
+Action: {{ old_action }} → {{ new_action }}
+
+**解释:**
+{{ reason }}
+
+**更新交易建议:**
+{{ updated_trade_suggestion }}
+
+**备注:**
+OI确认用于判断昨日成交是否更像新开仓，而不是日内噪音或平仓。
