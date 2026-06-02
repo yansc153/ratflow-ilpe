@@ -1,6 +1,8 @@
 import asyncio
+import json
+from pathlib import Path
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import yfinance as yf
 from app.data_sources.unusual_options_provider import UnusualOptionsProvider
 from app.config import settings
@@ -11,12 +13,13 @@ class YFinanceScanner(UnusualOptionsProvider):
     provider_name = "yfinance"
 
     async def fetch_unusual_options(self) -> List[Dict[str, Any]]:
-        tickers = [t.strip() for t in settings.watchlist_tickers.split(",") if t.strip()]
+        tickers = self._load_ticker_universe()
+        batch = self._next_ticker_batch(tickers, settings.scan_batch_size)
         all_alerts = []
 
         loop = asyncio.get_event_loop()
 
-        for ticker in tickers[:200]:
+        for ticker in batch:
             try:
                 alerts = await loop.run_in_executor(None, self._scan_ticker, ticker)
                 all_alerts.extend(alerts)
@@ -24,8 +27,90 @@ class YFinanceScanner(UnusualOptionsProvider):
             except Exception as e:
                 logger.warning("yfinance_ticker_failed", ticker=ticker, error=str(e))
 
-        logger.info("yfinance_scan_done", tickers_scanned=len(tickers[:200]), alerts_found=len(all_alerts))
+        logger.info(
+            "yfinance_scan_done",
+            universe_size=len(tickers),
+            batch_size=len(batch),
+            tickers_scanned=len(batch),
+            alerts_found=len(all_alerts),
+        )
         return all_alerts
+
+    def _load_ticker_universe(self) -> List[str]:
+        file_path = Path(settings.ticker_universe_file)
+        tickers: List[str] = []
+
+        if file_path.exists():
+            for raw_line in file_path.read_text().splitlines():
+                line = raw_line.split("#", 1)[0].strip()
+                if not line:
+                    continue
+                tickers.extend(part.strip() for part in line.split(",") if part.strip())
+        else:
+            tickers = [t.strip() for t in settings.watchlist_tickers.split(",") if t.strip()]
+
+        seen = set()
+        unique = []
+        for ticker in tickers:
+            normalized = ticker.upper()
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                unique.append(normalized)
+        return unique
+
+    def _next_ticker_batch(self, tickers: List[str], batch_size: int) -> List[str]:
+        if not tickers:
+            logger.warning("yfinance_universe_empty")
+            return []
+
+        safe_batch_size = max(1, min(int(batch_size or 1), len(tickers)))
+        state_path = Path(settings.scan_cursor_state_file)
+        state = self._read_cursor_state(state_path)
+        start = int(state.get("next_index", 0) or 0) % len(tickers)
+        end = start + safe_batch_size
+
+        if end <= len(tickers):
+            batch = tickers[start:end]
+        else:
+            batch = tickers[start:] + tickers[: end % len(tickers)]
+
+        next_index = end % len(tickers)
+        self._write_cursor_state(
+            state_path,
+            {
+                "next_index": next_index,
+                "universe_size": len(tickers),
+                "batch_size": safe_batch_size,
+                "last_batch_start": start,
+                "last_batch_count": len(batch),
+                "last_scan_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+        logger.info(
+            "yfinance_batch_selected",
+            universe_size=len(tickers),
+            batch_size=len(batch),
+            start_index=start,
+            next_index=next_index,
+            first_ticker=batch[0] if batch else None,
+            last_ticker=batch[-1] if batch else None,
+        )
+        return batch
+
+    def _read_cursor_state(self, state_path: Path) -> Dict[str, Any]:
+        try:
+            if state_path.exists():
+                return json.loads(state_path.read_text())
+        except Exception as e:
+            logger.warning("scan_cursor_read_failed", path=str(state_path), error=str(e))
+        return {}
+
+    def _write_cursor_state(self, state_path: Path, state: Dict[str, Any]) -> None:
+        try:
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(json.dumps(state, indent=2, sort_keys=True))
+        except Exception as e:
+            logger.warning("scan_cursor_write_failed", path=str(state_path), error=str(e))
 
     def _scan_ticker(self, ticker: str) -> List[Dict[str, Any]]:
         alerts = []

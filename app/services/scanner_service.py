@@ -1,6 +1,6 @@
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Set, Optional
 from sqlalchemy.orm import Session
 
@@ -101,6 +101,15 @@ class ScanOrchestrator:
                     ticker = str(alert_data.get("ticker", "")).upper()
                     if not ticker:
                         continue
+                    if self._is_duplicate_alert(db, alert_data):
+                        logger.info(
+                            "scan_alert_duplicate_skipped",
+                            ticker=ticker,
+                            strike=alert_data.get("strike"),
+                            expiry=alert_data.get("expiry"),
+                            option_type=str(alert_data.get("option_type", "CALL")).upper(),
+                        )
+                        continue
 
                     case = InvestigationCase(
                         ticker=ticker,
@@ -148,6 +157,24 @@ class ScanOrchestrator:
                     db.rollback()
         finally:
             db.close()
+
+    def _is_duplicate_alert(self, db: Session, alert_data: Dict[str, Any]) -> bool:
+        try:
+            cutoff = datetime.utcnow() - timedelta(hours=settings.scan_dedup_hours)
+            ticker = str(alert_data.get("ticker", "")).upper()
+            option_type = str(alert_data.get("option_type", "CALL")).upper()
+            strike = float(alert_data.get("strike", 0))
+            expiry = str(alert_data.get("expiry", ""))
+            return db.query(OptionAlert).filter(
+                OptionAlert.ticker == ticker,
+                OptionAlert.option_type == option_type,
+                OptionAlert.strike == strike,
+                OptionAlert.expiry == expiry,
+                OptionAlert.created_at >= cutoff,
+            ).first() is not None
+        except Exception as e:
+            logger.warning("scan_duplicate_check_failed", ticker=alert_data.get("ticker", "?"), error=str(e))
+            return False
 
 
 scan_orchestrator = ScanOrchestrator()

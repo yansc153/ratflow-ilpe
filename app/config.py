@@ -34,9 +34,16 @@ class Settings(BaseSettings):
         default="AAPL,MSFT,NVDA,TSLA,AMZN,META,GOOGL,AMD,SMCI,PLTR,MARA,COIN,ARM,SNOW,INTC,BA,NFLX,CRM,DIS,UBER,PYPL,SQ,SHOP,RIOT,CLSK,SOFI,AFRM,RBLX,DKNG,PENN,CVNA,GME,AMC,SPY,QQQ,IWM",
         alias="WATCHLIST_TICKERS",
     )
+    ticker_universe_file: str = Field(default="config/ticker_universe_us.txt", alias="TICKER_UNIVERSE_FILE")
+    scan_cursor_state_file: str = Field(default="data/scan_cursor.json", alias="SCAN_CURSOR_STATE_FILE")
+    scan_batch_size: int = Field(default=150, alias="SCAN_BATCH_SIZE")
+    scan_dedup_hours: int = Field(default=24, alias="SCAN_DEDUP_HOURS")
+    scan_continuous_enabled: bool = Field(default=True, alias="SCAN_CONTINUOUS_ENABLED")
     scan_schedule_morning: bool = Field(default=True, alias="SCAN_SCHEDULE_MORNING")
     scan_schedule_afternoon: bool = Field(default=True, alias="SCAN_SCHEDULE_AFTERNOON")
     scan_schedule_premarket: bool = Field(default=True, alias="SCAN_SCHEDULE_PREMARKET")
+    scan_schedule_open_confirm: bool = Field(default=True, alias="SCAN_SCHEDULE_OPEN_CONFIRM")
+    scan_schedule_preclose: bool = Field(default=True, alias="SCAN_SCHEDULE_PRECLOSE")
 
     scan_interval_minutes: int = Field(default=30, alias="SCAN_INTERVAL_MINUTES")
     oi_confirmation_hour_local: int = Field(default=21, alias="OI_CONFIRMATION_HOUR_LOCAL")

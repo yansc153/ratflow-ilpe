@@ -66,6 +66,51 @@ python scripts/seed_mock_alert.py
 
 ---
 
+### Scan and Push Logic
+
+RATFLOW separates scanning from publishing:
+
+1. A continuous batch scanner rotates through the configured ticker universe.
+2. Cheap filters find unusual option contracts first.
+3. Duplicate contracts are skipped for a cooldown window.
+4. Options DNA scores decide whether a case deserves LLM research.
+5. Discord publishing only happens when the final leakage score passes the publish threshold.
+
+Default production settings:
+
+```text
+TICKER_UNIVERSE_FILE=config/ticker_universe_us.txt
+SCAN_CURSOR_STATE_FILE=data/scan_cursor.json
+SCAN_BATCH_SIZE=150
+SCAN_INTERVAL_MINUTES=30
+SCAN_DEDUP_HOURS=24
+MIN_OPTIONS_DNA_RESEARCH_SCORE=45
+MIN_DISCORD_ALERT_SCORE=65
+```
+
+The scheduler runs:
+
+```text
+Continuous batch scan: every SCAN_INTERVAL_MINUTES
+06:00 BJT: post-close recap scan
+20:45 BJT: pre-market scan
+22:45 BJT: open-confirmation scan
+03:30 BJT: pre-close scan
+```
+
+To expand beyond the seed universe, edit the VPS file:
+
+```bash
+cd /docker/ratflow
+mkdir -p config
+nano config/ticker_universe_us.txt
+docker compose up -d --build --force-recreate
+```
+
+Use one ticker per line or comma-separated tickers. The scanner deduplicates them and persists the next batch cursor in `data/scan_cursor.json`.
+
+---
+
 ### Manual Alert Example
 
 ```bash
@@ -211,6 +256,16 @@ cp .env.example .env
 nano .env
 docker compose up -d --build
 docker compose logs -f
+```
+
+Update an existing VPS deployment:
+
+```bash
+cd /docker/ratflow
+git pull --ff-only
+docker compose up -d --build --force-recreate
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/scan/status
 ```
 
 Required `.env` values:

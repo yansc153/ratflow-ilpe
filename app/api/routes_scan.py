@@ -1,4 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks
+from app.config import settings
 from app.services.scanner_service import scan_orchestrator
 from app.logging_config import logger
 
@@ -17,7 +18,13 @@ async def scan_status():
     return {
         "status": "ok",
         "sources": ["tradier", "yfinance", "barchart_csv"],
-        "note": "Scans run on schedule: 08:00, 16:00, 20:30 Beijing time",
+        "continuous_scan": {
+            "enabled": settings.scan_continuous_enabled,
+            "interval_minutes": settings.scan_interval_minutes,
+            "batch_size": settings.scan_batch_size,
+            "note": "Batch scans rotate through the configured ticker universe.",
+        },
+        "anchor_scans_bjt": ["06:00", "20:45", "22:45", "03:30"],
     }
 
 
