@@ -1,5 +1,6 @@
 import asyncio
 import json
+import warnings
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
@@ -7,6 +8,14 @@ import yfinance as yf
 from app.data_sources.unusual_options_provider import UnusualOptionsProvider
 from app.config import settings
 from app.logging_config import logger
+
+
+warnings.filterwarnings(
+    "ignore",
+    message="Timestamp.utcnow is deprecated.*",
+    category=Warning,
+    module="yfinance.*",
+)
 
 
 class YFinanceScanner(UnusualOptionsProvider):

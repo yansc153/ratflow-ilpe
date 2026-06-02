@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     )
     ticker_universe_file: str = Field(default="config/ticker_universe_us.txt", alias="TICKER_UNIVERSE_FILE")
     scan_cursor_state_file: str = Field(default="data/scan_cursor.json", alias="SCAN_CURSOR_STATE_FILE")
-    scan_batch_size: int = Field(default=150, alias="SCAN_BATCH_SIZE")
+    scan_batch_size: int = Field(default=75, alias="SCAN_BATCH_SIZE")
     scan_dedup_hours: int = Field(default=24, alias="SCAN_DEDUP_HOURS")
     scan_continuous_enabled: bool = Field(default=True, alias="SCAN_CONTINUOUS_ENABLED")
     scan_schedule_morning: bool = Field(default=True, alias="SCAN_SCHEDULE_MORNING")
