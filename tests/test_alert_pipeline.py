@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.db import init_db, SessionLocal
 from app.harness.orchestrator import HarnessOrchestrator
-from app.models import AgentRun, EvidenceItem, InvestigationCase, OptionAlert
+from app.models import AgentRun, CaseStateTransition, EvidenceItem, InvestigationCase, OptionAlert
 
 client = TestClient(app)
 
@@ -93,5 +93,21 @@ def test_save_agent_run_defaults_non_numeric_relevance():
         assert db.query(AgentRun).filter_by(case_id=case.id).count() == 1
         evidence = db.query(EvidenceItem).filter_by(case_id=case.id).one()
         assert evidence.relevance_score == 0.5
+    finally:
+        db.close()
+
+
+def test_transition_to_same_status_is_idempotent():
+    db = SessionLocal()
+    try:
+        case = InvestigationCase(ticker="FCX", status="NORMALIZED")
+        db.add(case)
+        db.flush()
+
+        HarnessOrchestrator(db)._transition(case, "NORMALIZED", "retry")
+        db.commit()
+
+        assert case.status == "NORMALIZED"
+        assert db.query(CaseStateTransition).filter_by(case_id=case.id).count() == 0
     finally:
         db.close()

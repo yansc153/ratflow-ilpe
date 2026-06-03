@@ -160,6 +160,9 @@ class HarnessOrchestrator:
 
     def _transition(self, case, to_status: str, reason: str = ""):
         from_status = case.status
+        if from_status == to_status:
+            case.updated_at = datetime.utcnow()
+            return
         StateMachine.transition(case, to_status, reason)
         transition = CaseStateTransition(
             case_id=case.id,
