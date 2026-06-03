@@ -2,7 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.db import init_db, SessionLocal
-from app.models import Base
+from app.harness.orchestrator import HarnessOrchestrator
+from app.models import AgentRun, EvidenceItem, InvestigationCase, OptionAlert
 
 client = TestClient(app)
 
@@ -52,3 +53,45 @@ def test_get_cases():
 def test_get_case_not_found():
     response = client.get("/cases/99999")
     assert response.status_code == 404
+
+
+def test_save_agent_run_defaults_non_numeric_relevance():
+    db = SessionLocal()
+    try:
+        case = InvestigationCase(ticker="NOC", status="NEW")
+        db.add(case)
+        db.flush()
+        alert = OptionAlert(
+            case_id=case.id,
+            source="test",
+            ticker="NOC",
+            option_type="CALL",
+            strike=500.0,
+            expiry="2026-06-12",
+            volume=1000,
+            open_interest=100,
+        )
+        db.add(alert)
+        db.flush()
+
+        HarnessOrchestrator(db)._save_agent_run(
+            case,
+            alert,
+            "major_contract_agent",
+            {},
+            {
+                "positive_evidence": [
+                    {
+                        "title": "Contract clue",
+                        "relevance": "Indicates significant existing orders and potential future contracts.",
+                    }
+                ]
+            },
+        )
+        db.commit()
+
+        assert db.query(AgentRun).filter_by(case_id=case.id).count() == 1
+        evidence = db.query(EvidenceItem).filter_by(case_id=case.id).one()
+        assert evidence.relevance_score == 0.5
+    finally:
+        db.close()

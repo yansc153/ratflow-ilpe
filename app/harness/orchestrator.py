@@ -247,8 +247,15 @@ class HarnessOrchestrator:
                         url=str(ev.get("url", ""))[:2000],
                         published_at=str(ev.get("date", "")),
                         snippet=str(ev.get("snippet", ""))[:2000],
-                        relevance_score=float(ev.get("relevance", 0.5)),
+                        relevance_score=self._safe_float(ev.get("relevance"), 0.5),
                     ))
+
+    @staticmethod
+    def _safe_float(value: Any, default: float = 0.0) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
 
     def _count_comparable(self, case) -> int:
         try:
