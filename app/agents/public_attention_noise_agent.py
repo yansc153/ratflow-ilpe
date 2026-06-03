@@ -1,18 +1,44 @@
 from typing import Dict, Any
 from app.agents.base import BaseAgent, AGENT_SYSTEM_PROMPT
 from app.services.deepseek_client import deepseek
+from app.data_sources.market_context import YFinanceResearchAdapter
+from app.data_sources.news_search import NewsSearchAdapter
+from app.data_sources.website_research import SocialResearchAdapter, PriceDataAdapter
 
 
 class PublicAttentionNoiseAgent(BaseAgent):
     agent_name = "public_attention_noise_agent"
+
+    def __init__(self):
+        super().__init__()
+        self.market = YFinanceResearchAdapter()
+        self.news = NewsSearchAdapter()
+        self.social = SocialResearchAdapter()
+        self.price = PriceDataAdapter()
 
     async def run(self, case_data: Dict[str, Any]) -> Dict[str, Any]:
         try:
             alert = case_data.get("alert", {})
             ticker = alert.get("ticker", "")
             contract = case_data.get("normalized_contract", {})
+            market_ctx = await self.market.fetch(ticker=ticker)
+            news_ctx = await self.news.fetch(query=f"{ticker} stock news unusual options hype earnings", max_results=6)
+            social_ctx = await self.social.fetch(ticker=ticker)
+            price_ctx = await self.price.fetch(ticker=ticker)
 
             user_prompt = f"""Act as the cold-water agent for unusual option activity in {ticker}.
+
+Retrieved market context:
+{market_ctx.get('data', {})}
+
+Retrieved news context:
+{news_ctx.get('data', [])}
+
+Retrieved social/search context:
+{social_ctx.get('data', [])}
+
+Retrieved price context:
+{price_ctx.get('data', {})}
 
 Determine whether the option flow is likely:
 - Public hype / meme speculation
@@ -50,6 +76,12 @@ If you cannot access real-time social data, estimate based on company characteri
             result = await deepseek.chat(system_prompt=AGENT_SYSTEM_PROMPT, user_prompt=user_prompt)
             output = self.base_output(case_data.get("case_uid", "unknown"))
             output.update({k: v for k, v in result.items() if k in output})
+            output["retrieved_context"] = {
+                "market": market_ctx.get("data", {}),
+                "news": news_ctx.get("data", []),
+                "social": social_ctx.get("data", []),
+                "price": price_ctx.get("data", {}),
+            }
             return output
         except Exception as e:
             self.logger.error("public_attention_noise_failed", error=str(e))

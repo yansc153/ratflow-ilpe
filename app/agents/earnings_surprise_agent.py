@@ -1,10 +1,17 @@
 from typing import Dict, Any
 from app.agents.base import BaseAgent, AGENT_SYSTEM_PROMPT
 from app.services.deepseek_client import deepseek
+from app.data_sources.market_context import YFinanceResearchAdapter
+from app.data_sources.news_search import NewsSearchAdapter
 
 
 class EarningsSurpriseAgent(BaseAgent):
     agent_name = "earnings_surprise_agent"
+
+    def __init__(self):
+        super().__init__()
+        self.market = YFinanceResearchAdapter()
+        self.search = NewsSearchAdapter()
 
     async def run(self, case_data: Dict[str, Any]) -> Dict[str, Any]:
         try:
@@ -12,10 +19,18 @@ class EarningsSurpriseAgent(BaseAgent):
             ticker = alert.get("ticker", "")
             company = alert.get("company_name", ticker)
             dte = case_data.get("normalized_contract", {}).get("dte", 0)
+            market_ctx = await self.market.fetch(ticker=ticker)
+            search_ctx = await self.search.fetch(query=f"{ticker} earnings guidance analyst estimate revisions", max_results=6)
 
             user_prompt = f"""Research whether the unusual option activity for {company} ({ticker}) may be betting on an earnings surprise.
 
 DTE: {dte} days to expiration.
+
+Retrieved market context:
+{market_ctx.get('data', {})}
+
+Retrieved public search context:
+{search_ctx.get('data', [])}
 
 Check public clues:
 - Next earnings date estimate
@@ -48,6 +63,10 @@ Do not fabricate."""
             result = await deepseek.chat(system_prompt=AGENT_SYSTEM_PROMPT, user_prompt=user_prompt)
             output = self.base_output(case_data.get("case_uid", "unknown"))
             output.update({k: v for k, v in result.items() if k in output})
+            output["retrieved_context"] = {
+                "market": market_ctx.get("data", {}),
+                "search": search_ctx.get("data", []),
+            }
             return output
         except Exception as e:
             self.logger.error("earnings_surprise_failed", error=str(e))
