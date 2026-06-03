@@ -269,6 +269,7 @@ class HarnessOrchestrator:
     def _build_report_context(self, case, alert, contract, dna, judge, trade, event_probs, capped) -> Dict[str, Any]:
         probs = event_probs or {}
         contract_original = trade.get("original_contract", {})
+        agent_audit = self._build_agent_audit_rows(case)
 
         return {
             "case_uid": case.case_uid,
@@ -303,6 +304,7 @@ class HarnessOrchestrator:
             "why_suspicious": judge.get("why_suspicious", []),
             "positive_evidence": citation_service.format_evidence(judge.get("positive_evidence", []), "positive"),
             "negative_evidence": judge.get("key_risks", []) + (dna.get("red_flags", []) or []),
+            "agent_audit": agent_audit,
             "primary_action": trade.get("primary_action", "observe_only"),
             "original_contract_trade": contract_original.get("contract", ""),
             "alternative_contract_trade": (trade.get("alternative_contract", {}) or {}).get("contract", "无"),
@@ -310,3 +312,37 @@ class HarnessOrchestrator:
             "take_profit_plan": trade.get("take_profit_plan", []),
             "invalidation": trade.get("invalidation", []),
         }
+
+    def _build_agent_audit_rows(self, case) -> list[dict]:
+        rows = []
+        for run in case.agent_runs:
+            output = run.output_json if isinstance(run.output_json, dict) else {}
+            positive = len(output.get("positive_evidence") or output.get("all_positive_evidence") or [])
+            negative = len(output.get("negative_evidence") or [])
+            summary = (output.get("summary") or output.get("main_thesis") or run.error or "No summary").strip()
+            rows.append({
+                "label": self._agent_display_name(run.agent_name),
+                "score": output.get("score", "N/A"),
+                "positive_count": positive,
+                "negative_count": negative,
+                "summary": summary[:120],
+                "status": run.status,
+            })
+        return rows
+
+    @staticmethod
+    def _agent_display_name(agent_name: str) -> str:
+        labels = {
+            "options_dna_agent": "Options DNA",
+            "sec_filings_agent": "SEC filings",
+            "major_contract_agent": "Major contract",
+            "earnings_surprise_agent": "Earnings",
+            "ai_transformation_agent": "AI transformation",
+            "public_attention_noise_agent": "Noise",
+            "regulatory_legal_patent_agent": "Reg/FDA/Patent",
+            "ma_strategic_agent": "M&A",
+            "event_hypothesis_agent": "Event hypothesis",
+            "judge_agent": "Judge",
+            "trade_construction_agent": "Trade construction",
+        }
+        return labels.get(agent_name, agent_name)

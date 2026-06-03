@@ -62,6 +62,8 @@ class CaseResponse(BaseModel):
 class CaseDetailResponse(CaseResponse):
     alert: Optional[OptionAlertResponse] = None
     leakage_report: Optional[Dict[str, Any]] = None
+    agent_runs: List["AgentRunResponse"] = []
+    evidence_items: List["EvidenceItemResponse"] = []
 
 
 class AgentRunResponse(BaseModel):

@@ -76,6 +76,8 @@ async def get_case(case_id: int, db: Session = Depends(get_db)):
         updated_at=case.updated_at,
         alert=alert_data,
         leakage_report=report_data,
+        agent_runs=case.agent_runs,
+        evidence_items=case.evidence_items,
     )
 
 

@@ -35,6 +35,11 @@ Calibration: {{ calibration_grade }} / {{ calibration_confidence }}
 - {{ item }}
 {% endfor %}
 
+**调研审计:**
+{% for item in agent_audit %}
+- {{ item.label }}: {{ item.score }} 分 | 正证 {{ item.positive_count }} | 反证 {{ item.negative_count }} | {{ item.summary }}
+{% endfor %}
+
 **公开证据:**
 {% for item in positive_evidence %}
 - [{{ item.quality }}] {{ item.title }}

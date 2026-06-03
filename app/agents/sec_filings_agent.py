@@ -1,15 +1,22 @@
 from typing import Dict, Any
 from app.agents.base import BaseAgent, AGENT_SYSTEM_PROMPT
 from app.services.deepseek_client import deepseek
+from app.data_sources.sec_edgar import SECEdgarAdapter
 
 
 class SECFilingsAgent(BaseAgent):
     agent_name = "sec_filings_agent"
 
+    def __init__(self):
+        super().__init__()
+        self.edgar = SECEdgarAdapter()
+
     async def run(self, case_data: Dict[str, Any]) -> Dict[str, Any]:
         try:
             alert = case_data.get("alert", {})
             ticker = alert.get("ticker", "")
+            recent_filings = await self.edgar.get_recent_filings(ticker, limit=8)
+            filings_block = self._format_recent_filings(recent_filings)
 
             user_prompt = f"""You are researching SEC filings for {ticker}.
 
@@ -37,7 +44,10 @@ Search for these signals:
 - Segment reporting changes
 
 Note: You should use public search. If you cannot access these filings, state the limitation.
-For {ticker}, search SEC EDGAR for recent filings and identify any unusual language or patterns.
+For {ticker}, use the recent SEC filing index below as the primary source of truth.
+
+Recent SEC filing index:
+{filings_block}
 
 Return JSON:
 {{
@@ -59,3 +69,16 @@ If you cannot access actual SEC data, return an empty evidence array with a note
         except Exception as e:
             self.logger.error("sec_filings_failed", error=str(e))
             return {"agent_name": self.agent_name, "error": str(e)}
+
+    @staticmethod
+    def _format_recent_filings(filings: list[dict]) -> str:
+        if not filings:
+            return "No recent SEC filings were retrieved."
+        lines = []
+        for filing in filings:
+            lines.append(
+                f"- {filing.get('filing_date', '')} | {filing.get('form', '')} | "
+                f"{filing.get('description', '') or filing.get('primary_document', '')} | "
+                f"{filing.get('url', '')}"
+            )
+        return "\n".join(lines)

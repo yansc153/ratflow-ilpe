@@ -55,6 +55,57 @@ def test_get_case_not_found():
     assert response.status_code == 404
 
 
+def test_get_case_includes_agent_runs_and_evidence_items():
+    db = SessionLocal()
+    try:
+        case = InvestigationCase(ticker="NOC", status="PUBLISH_SKIPPED")
+        db.add(case)
+        db.flush()
+        alert = OptionAlert(
+            case_id=case.id,
+            source="test",
+            ticker="NOC",
+            option_type="CALL",
+            strike=450.0,
+            expiry="2026-06-18",
+            volume=70,
+            open_interest=5,
+        )
+        db.add(alert)
+        db.flush()
+        db.add(
+            AgentRun(
+                case_id=case.id,
+                alert_id=alert.id,
+                agent_name="sec_filings_agent",
+                status="completed",
+                output_json={"score": 0, "summary": "Unable to access SEC filings"},
+            )
+        )
+        db.add(
+            EvidenceItem(
+                case_id=case.id,
+                agent_name="ma_strategic_agent",
+                evidence_quality="C",
+                polarity="positive",
+                title="Strategic review reference",
+                source_name="Northrop investor relations",
+                url="https://example.com",
+                snippet="Historic strategic review language",
+                relevance_score=0.5,
+            )
+        )
+        db.commit()
+
+        response = client.get(f"/cases/{case.id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["agent_runs"][0]["agent_name"] == "sec_filings_agent"
+        assert data["evidence_items"][0]["agent_name"] == "ma_strategic_agent"
+    finally:
+        db.close()
+
+
 def test_save_agent_run_defaults_non_numeric_relevance():
     db = SessionLocal()
     try:
