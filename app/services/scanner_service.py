@@ -80,7 +80,7 @@ class ScanOrchestrator:
                 continue
             if premium < 20_000:
                 continue
-            if dte < 5 or dte > 120:
+            if dte < 1 or dte > 120:
                 continue
 
             a["_vol_oi"] = round(vol_oi, 1)

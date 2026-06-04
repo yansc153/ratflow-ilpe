@@ -151,7 +151,7 @@ class YFinanceScanner(UnusualOptionsProvider):
                 except ValueError:
                     continue
 
-                if dte < 7 or dte > 90:
+                if dte < 1 or dte > 90:
                     continue
 
                 try:

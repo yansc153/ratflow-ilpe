@@ -1,7 +1,8 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 
 from app.config import settings
 from app.logging_config import logger
@@ -82,13 +83,23 @@ class HarnessOrchestrator:
         case_data["options_dna"] = dna_result
 
         dna_score = dna_result.get("options_dna_score", 0)
-        if dna_score < settings.min_options_dna_research_score:
-            self._transition(case, "LOW_PRIORITY", f"DNA score {dna_score} < threshold {settings.min_options_dna_research_score}")
-            self.db.commit()
-            logger.info("harness_low_priority", case_uid=case.case_uid, dna_score=dna_score)
-            return {"status": "LOW_PRIORITY", "options_dna_score": dna_score}
+        dna_route = dna_result.get("dna_route", "LOW_PRIORITY")
+        case_data["dna_route"] = dna_route
 
-        self._transition(case, "RESEARCH_RUNNING", f"DNA score {dna_score} >= threshold, launching research agents")
+        if dna_route == "DROP_NOISE":
+            reason = dna_result.get("block_reason") or f"DNA route DROP_NOISE, score={dna_score}"
+            self._transition(case, "LOW_PRIORITY", reason)
+            self.db.commit()
+            logger.info("harness_low_priority", case_uid=case.case_uid, dna_score=dna_score, dna_route=dna_route)
+            return {"status": "LOW_PRIORITY", "options_dna_score": dna_score, "dna_route": dna_route}
+
+        if dna_route == "SPECULATIVE_RESEARCH" and self._speculative_cooldown_active(case, alert.ticker):
+            self._transition(case, "LOW_PRIORITY", f"SPECULATIVE_RESEARCH cooldown active for {alert.ticker}")
+            self.db.commit()
+            logger.info("harness_speculative_cooldown", case_uid=case.case_uid, ticker=alert.ticker)
+            return {"status": "LOW_PRIORITY", "options_dna_score": dna_score, "dna_route": "SPECULATIVE_COOLDOWN"}
+
+        self._transition(case, "RESEARCH_RUNNING", f"DNA route {dna_route}, score={dna_score}")
 
         collected = await self.evidence_collector.collect(case_data)
         collector_output = {
@@ -273,6 +284,7 @@ class HarnessOrchestrator:
             },
             "normalized_contract": contract,
             "options_dna": {},
+            "dna_route": "LOW_PRIORITY",
             "source_context": {},
             "validated_evidence": {},
             "hypothesis_route": {},
@@ -323,6 +335,18 @@ class HarnessOrchestrator:
         except Exception:
             return 0
 
+    def _speculative_cooldown_active(self, case, ticker: str) -> bool:
+        cutoff = datetime.utcnow() - timedelta(hours=settings.speculative_ticker_cooldown_hours)
+        recent = self.db.query(InvestigationCase).filter(
+            and_(
+                InvestigationCase.ticker == ticker,
+                InvestigationCase.id != case.id,
+                InvestigationCase.created_at >= cutoff,
+                InvestigationCase.status.notin_(["NEW", "NORMALIZED", "OPTION_DNA_SCORED", "LOW_PRIORITY", "CLOSED"]),
+            )
+        ).first()
+        return recent is not None
+
     def _build_report_context(self, case, alert, contract, dna, judge, trade, event_probs, capped, validated=None, route=None) -> Dict[str, Any]:
         probs = event_probs or {}
         contract_original = trade.get("original_contract", {})
@@ -357,6 +381,10 @@ class HarnessOrchestrator:
             "open_interest": contract.get("open_interest", 0),
             "volume_oi_ratio": contract.get("volume_oi_ratio", "N/A"),
             "options_dna_score": dna.get("options_dna_score", 0),
+            "dna_route": dna.get("dna_route", "LOW_PRIORITY"),
+            "anomaly_score": dna.get("anomaly_score", 0),
+            "contract_quality_score": dna.get("contract_quality_score", 0),
+            "convexity_score": dna.get("convexity_score", 0),
             "contract_quality": dna.get("contract_quality", "unknown"),
             "leakage_score": judge.get("leakage_score", 0),
             "tradeability_score": judge.get("tradeability_score", 0),

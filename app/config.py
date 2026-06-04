@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     max_alerts_per_scan: int = Field(default=15, alias="MAX_ALERTS_PER_SCAN")
 
     min_options_dna_research_score: int = Field(default=45, alias="MIN_OPTIONS_DNA_RESEARCH_SCORE")
+    min_speculative_research_score: int = Field(default=45, alias="MIN_SPECULATIVE_RESEARCH_SCORE")
+    speculative_ticker_cooldown_hours: int = Field(default=8, alias="SPECULATIVE_TICKER_COOLDOWN_HOURS")
     min_discord_alert_score: int = Field(default=65, alias="MIN_DISCORD_ALERT_SCORE")
     min_trade_signal_score: int = Field(default=75, alias="MIN_TRADE_SIGNAL_SCORE")
 
