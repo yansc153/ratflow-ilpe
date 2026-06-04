@@ -172,6 +172,9 @@ class HarnessOrchestrator:
         leakage_score = judge_result.get("leakage_score", 0)
         tradeability_score = judge_result.get("tradeability_score", 0)
 
+        # Flush staged agent runs before report rendering so agent_audit can query them reliably.
+        self.db.flush()
+
         report_ctx = self._build_report_context(case, alert, contract, dna_result, judge_result, trade_result, event_probs, capped, validated, route)
         report_md = report_renderer.render_initial_report(report_ctx)
 
