@@ -60,6 +60,7 @@ async def get_case(case_id: int, db: Session = Depends(get_db)):
             "model_estimated_profit_probability": case.leakage_report.model_estimated_profit_probability,
             "event_probabilities_json": case.leakage_report.event_probabilities_json,
             "discord_message_id": case.leakage_report.discord_message_id,
+            "research_evidence_json": case.leakage_report.research_evidence_json,
         }
 
     return CaseDetailResponse(

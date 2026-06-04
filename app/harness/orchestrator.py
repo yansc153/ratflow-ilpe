@@ -12,6 +12,11 @@ from app.models import (
 from app.harness.state_machine import StateMachine
 from app.harness.task_panel import TaskPanelManager
 from app.harness.evidence_merger import EvidenceMerger
+from app.harness.evidence_pipeline import (
+    EvidenceCollector,
+    EvidenceValidator,
+    HypothesisRouter,
+)
 from app.harness.probability import ProbabilityEngine
 from app.harness.calibration import CalibrationEngine
 
@@ -33,21 +38,24 @@ from app.services.discord_bot_publisher import discord_publisher
 from app.services.source_citation_service import citation_service
 
 
-RESEARCH_AGENTS = [
-    ("sec_filings_agent", SECFilingsAgent()),
-    ("ai_transformation_agent", AITransformationAgent()),
-    ("ma_strategic_agent", MAStrategicAgent()),
-    ("major_contract_agent", MajorContractAgent()),
-    ("earnings_surprise_agent", EarningsSurpriseAgent()),
-    ("regulatory_legal_patent_agent", RegulatoryLegalPatentAgent()),
-    ("public_attention_noise_agent", PublicAttentionNoiseAgent()),
-]
+RESEARCH_AGENTS = {
+    "sec_filings_agent": SECFilingsAgent(),
+    "ai_transformation_agent": AITransformationAgent(),
+    "ma_strategic_agent": MAStrategicAgent(),
+    "major_contract_agent": MajorContractAgent(),
+    "earnings_surprise_agent": EarningsSurpriseAgent(),
+    "regulatory_legal_patent_agent": RegulatoryLegalPatentAgent(),
+    "public_attention_noise_agent": PublicAttentionNoiseAgent(),
+}
 
 
 class HarnessOrchestrator:
     def __init__(self, db: Session):
         self.db = db
         self.task_manager = TaskPanelManager()
+        self.evidence_collector = EvidenceCollector()
+        self.evidence_validator = EvidenceValidator()
+        self.hypothesis_router = HypothesisRouter()
 
     async def run_case(self, case_id: int) -> Dict[str, Any]:
         case = self.db.query(InvestigationCase).filter(InvestigationCase.id == case_id).first()
@@ -82,9 +90,45 @@ class HarnessOrchestrator:
 
         self._transition(case, "RESEARCH_RUNNING", f"DNA score {dna_score} >= threshold, launching research agents")
 
+        collected = await self.evidence_collector.collect(case_data)
+        collector_output = {
+            "agent_name": "evidence_collector",
+            "score": 0,
+            "summary": f"collected {collected['collection_summary']['evidence_item_count']} raw evidence items across {collected['collection_summary']['raw_source_count']} source buckets",
+            "evidence_item_count": collected["collection_summary"]["evidence_item_count"],
+            "raw_source_count": collected["collection_summary"]["raw_source_count"],
+        }
+        self._save_agent_run(case, alert, "evidence_collector", case_data, collector_output)
+
+        validated = self.evidence_validator.validate(collected)
+        validator_output = {
+            "agent_name": "evidence_validator",
+            "score": validated.get("all_evidence_count", 0),
+            "summary": validated.get("summary", ""),
+            "all_evidence_count": validated.get("all_evidence_count", 0),
+            "missing_dimensions": validated.get("missing_dimensions", []),
+            "conflicts": validated.get("conflicts", []),
+        }
+        self._save_agent_run(case, alert, "evidence_validator", case_data, validator_output)
+
+        case_data["source_context"] = validated.get("source_context", {})
+        case_data["validated_evidence"] = validated
+
+        route = self.hypothesis_router.route(validated, case_data)
+        router_output = {
+            "agent_name": "hypothesis_router",
+            "score": 0,
+            "summary": route.get("summary", ""),
+            "selected_agents": route.get("selected_agents", []),
+            "ordered_hypotheses": route.get("ordered_hypotheses", []),
+            "topic_scores": route.get("topic_scores", {}),
+        }
+        self._save_agent_run(case, alert, "hypothesis_router", case_data, router_output)
+        case_data["hypothesis_route"] = route
+
         parallel_tasks = [
-            (name, lambda a=agent, d=case_data: a.run(d))
-            for name, agent in RESEARCH_AGENTS
+            (name, lambda a=RESEARCH_AGENTS[name], d=case_data: a.run(d))
+            for name in route.get("selected_agents", [])
         ]
         research_results = await self.task_manager.run_parallel(parallel_tasks, timeout=settings.llm_timeout_seconds)
 
@@ -95,6 +139,9 @@ class HarnessOrchestrator:
         noise_result = research_results.get("public_attention_noise_agent", {})
 
         merged = EvidenceMerger.merge(research_results, noise_result)
+        merged["validated_summary"] = validated.get("summary", "")
+        merged["validated_missing_dimensions"] = validated.get("missing_dimensions", [])
+        merged["hypothesis_route"] = route
         case_data["merged_evidence"] = merged
         case_data["noise_agent"] = noise_result
 
@@ -125,7 +172,7 @@ class HarnessOrchestrator:
         leakage_score = judge_result.get("leakage_score", 0)
         tradeability_score = judge_result.get("tradeability_score", 0)
 
-        report_ctx = self._build_report_context(case, alert, contract, dna_result, judge_result, trade_result, event_probs, capped)
+        report_ctx = self._build_report_context(case, alert, contract, dna_result, judge_result, trade_result, event_probs, capped, validated, route)
         report_md = report_renderer.render_initial_report(report_ctx)
 
         report = LeakageReport(
@@ -138,7 +185,11 @@ class HarnessOrchestrator:
             calibration_grade=capped["calibration_grade"],
             event_probabilities_json=event_probs,
             option_dna_json=dna_result,
-            research_evidence_json=merged,
+            research_evidence_json={
+                "validated_evidence": validated,
+                "merged_evidence": merged,
+                "hypothesis_route": route,
+            },
             noise_risks_json=noise_result,
             trade_suggestion_json=trade_result,
             report_markdown=report_md,
@@ -219,6 +270,9 @@ class HarnessOrchestrator:
             },
             "normalized_contract": contract,
             "options_dna": {},
+            "source_context": {},
+            "validated_evidence": {},
+            "hypothesis_route": {},
         }
 
     def _save_agent_run(self, case, alert, agent_name: str, input_data: dict, output: dict):
@@ -266,10 +320,23 @@ class HarnessOrchestrator:
         except Exception:
             return 0
 
-    def _build_report_context(self, case, alert, contract, dna, judge, trade, event_probs, capped) -> Dict[str, Any]:
+    def _build_report_context(self, case, alert, contract, dna, judge, trade, event_probs, capped, validated=None, route=None) -> Dict[str, Any]:
         probs = event_probs or {}
         contract_original = trade.get("original_contract", {})
         agent_audit = self._build_agent_audit_rows(case)
+        validated = validated or {}
+        route = route or {}
+        hypothesis_buckets = []
+        for topic, bucket in (validated.get("by_hypothesis") or {}).items():
+            if not bucket.get("count"):
+                continue
+            titles = [item.get("title", "") for item in bucket.get("evidence", [])[:3] if item.get("title")]
+            hypothesis_buckets.append({
+                "topic": topic,
+                "count": bucket.get("count", 0),
+                "sources": bucket.get("sources", []),
+                "sample_titles": titles,
+            })
 
         return {
             "case_uid": case.case_uid,
@@ -305,6 +372,11 @@ class HarnessOrchestrator:
             "positive_evidence": citation_service.format_evidence(judge.get("positive_evidence", []), "positive"),
             "negative_evidence": judge.get("key_risks", []) + (dna.get("red_flags", []) or []),
             "agent_audit": agent_audit,
+            "validated_summary": validated.get("summary", ""),
+            "validated_missing_dimensions": validated.get("missing_dimensions", []),
+            "validated_conflicts": validated.get("conflicts", []),
+            "hypothesis_route": route.get("selected_agents", []),
+            "hypothesis_buckets": hypothesis_buckets,
             "primary_action": trade.get("primary_action", "observe_only"),
             "original_contract_trade": contract_original.get("contract", ""),
             "alternative_contract_trade": (trade.get("alternative_contract", {}) or {}).get("contract", "无"),
@@ -342,6 +414,9 @@ class HarnessOrchestrator:
             "regulatory_legal_patent_agent": "Reg/FDA/Patent",
             "ma_strategic_agent": "M&A",
             "event_hypothesis_agent": "Event hypothesis",
+            "evidence_collector": "Evidence collector",
+            "evidence_validator": "Evidence validator",
+            "hypothesis_router": "Hypothesis router",
             "judge_agent": "Judge",
             "trade_construction_agent": "Trade construction",
         }

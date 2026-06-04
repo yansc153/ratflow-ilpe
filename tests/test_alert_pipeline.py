@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.db import init_db, SessionLocal
 from app.harness.orchestrator import HarnessOrchestrator
-from app.models import AgentRun, CaseStateTransition, EvidenceItem, InvestigationCase, OptionAlert
+from app.models import AgentRun, CaseStateTransition, EvidenceItem, InvestigationCase, LeakageReport, OptionAlert
 
 client = TestClient(app)
 
@@ -102,6 +102,41 @@ def test_get_case_includes_agent_runs_and_evidence_items():
         data = response.json()
         assert data["agent_runs"][0]["agent_name"] == "sec_filings_agent"
         assert data["evidence_items"][0]["agent_name"] == "ma_strategic_agent"
+    finally:
+        db.close()
+
+
+def test_case_detail_includes_research_evidence_json():
+    db = SessionLocal()
+    try:
+        case = InvestigationCase(ticker="NOC", status="PUBLISH_SKIPPED")
+        db.add(case)
+        db.flush()
+        alert = OptionAlert(
+            case_id=case.id,
+            source="test",
+            ticker="NOC",
+            option_type="CALL",
+            strike=450.0,
+            expiry="2026-06-18",
+            volume=70,
+            open_interest=5,
+        )
+        db.add(alert)
+        report = LeakageReport(
+            case_id=case.id,
+            alert_id=alert.id,
+            leakage_score=25,
+            tradeability_score=15,
+            research_evidence_json={"validated_evidence": {"summary": "contract:1"}},
+        )
+        db.add(report)
+        db.commit()
+
+        response = client.get(f"/cases/{case.id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["leakage_report"]["research_evidence_json"]["validated_evidence"]["summary"] == "contract:1"
     finally:
         db.close()
 

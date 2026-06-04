@@ -40,6 +40,32 @@ Calibration: {{ calibration_grade }} / {{ calibration_confidence }}
 - {{ item.label }}: {{ item.score }} 分 | 正证 {{ item.positive_count }} | 反证 {{ item.negative_count }} | {{ item.summary }}
 {% endfor %}
 
+**Evidence 路由:**
+{% for item in hypothesis_route %}
+- {{ item }}
+{% endfor %}
+
+**Validated Evidence 总结:**
+{{ validated_summary }}
+
+**缺失维度:**
+{% for item in validated_missing_dimensions %}
+- {{ item }}
+{% endfor %}
+
+**冲突标记:**
+{% for item in validated_conflicts %}
+- {{ item }}
+{% endfor %}
+
+**Hypothesis Buckets:**
+{% for bucket in hypothesis_buckets %}
+- {{ bucket.topic }} | {{ bucket.count }} 条 | Sources: {{ bucket.sources|join(', ') }}
+{% for title in bucket.sample_titles %}
+  - {{ title }}
+{% endfor %}
+{% endfor %}
+
 **公开证据:**
 {% for item in positive_evidence %}
 - [{{ item.quality }}] {{ item.title }}

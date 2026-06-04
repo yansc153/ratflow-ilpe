@@ -11,6 +11,8 @@ class EventHypothesisAgent(BaseAgent):
             alert = case_data.get("alert", {})
             contract = case_data.get("normalized_contract", {})
             dna = case_data.get("options_dna", {})
+            validated = case_data.get("validated_evidence", {})
+            evidence_items = ((validated.get("all_evidence") or [])[:8]) if validated else []
 
             user_prompt = f"""Analyze this unusual option alert and generate prior event probabilities.
 
@@ -29,6 +31,9 @@ Option Data:
 
 Options DNA Score: {dna.get('options_dna_score', 0)}/100
 Contract Quality: {dna.get('contract_quality', 'unknown')}
+
+Validated evidence snapshot:
+{self.render_validated_items(evidence_items, limit=8)}
 
 Based on option structure, DTE, volume/OI ratio, and direction, estimate what event categories are most likely being bet on.
 

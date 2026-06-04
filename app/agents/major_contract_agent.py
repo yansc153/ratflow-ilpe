@@ -20,11 +20,22 @@ class MajorContractAgent(BaseAgent):
             alert = case_data.get("alert", {})
             ticker = alert.get("ticker", "")
             company = alert.get("company_name", ticker)
-            gov_ctx = await self.gov.fetch(company=company)
-            search_ctx = await self.search.fetch(query=f'"{company}" contract award customer partnership backlog bookings', max_results=6)
-            filings_ctx = await self.edgar.fetch(ticker=ticker, limit=6)
+            validated_contract = self.get_validated_bucket(case_data, "contract")
+            gov_ctx = self.get_source_context(case_data, "gov_contracts")
+            search_ctx = self.get_source_context(case_data, "contract_search")
+            sec_ctx = self.get_source_context(case_data, "sec_filings")
+            filings_ctx = {"data": sec_ctx.get("data", [])} if sec_ctx else {}
+            if not gov_ctx:
+                gov_ctx = await self.gov.fetch(company=company)
+            if not search_ctx:
+                search_ctx = await self.search.fetch(query=f'"{company}" contract award customer partnership backlog bookings', max_results=6)
+            if not filings_ctx:
+                filings_ctx = await self.edgar.fetch(ticker=ticker, limit=6)
 
             user_prompt = f"""Research whether {company} ({ticker}) may have a major customer contract, government order, defense award, cloud/enterprise deal, healthcare procurement, or supplier agreement pending.
+
+Validated contract evidence:
+{self.render_validated_items(validated_contract)}
 
 Retrieved government/public procurement context:
 {gov_ctx.get('data', [])}
@@ -64,6 +75,7 @@ Do not fabricate evidence. State limitations clearly if unable to access data.""
             output = self.base_output(case_data.get("case_uid", "unknown"))
             output.update({k: v for k, v in result.items() if k in output})
             output["retrieved_context"] = {
+                "validated_bucket": validated_contract,
                 "gov_contracts": gov_ctx.get("data", []),
                 "search": search_ctx.get("data", []),
                 "sec_filings": filings_ctx.get("data", []),

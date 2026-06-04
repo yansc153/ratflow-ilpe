@@ -70,3 +70,56 @@ async def test_ai_agent_attaches_retrieved_context(monkeypatch):
     assert output["score"] == 55
     assert output["retrieved_context"]["web"][0]["title"] == "AI launch"
     assert output["retrieved_context"]["jobs"][0]["title"] == "AI launch"
+
+
+@pytest.mark.asyncio
+async def test_ai_agent_prefers_validated_evidence_without_fetching(monkeypatch):
+    async def should_not_fetch(*args, **kwargs):
+        raise AssertionError("validated-evidence path should avoid extra fetches")
+
+    captured = {}
+
+    async def fake_chat(**kwargs):
+        captured.update(kwargs)
+        return {
+            "score": 61,
+            "confidence": "medium",
+            "summary": "Validated AI clues present",
+            "positive_evidence": [],
+            "negative_evidence": [],
+            "uncertainties": [],
+            "errors": [],
+        }
+
+    agent = AITransformationAgent()
+    monkeypatch.setattr(agent.search, "fetch", should_not_fetch)
+    monkeypatch.setattr(agent.jobs, "fetch", should_not_fetch)
+    monkeypatch.setattr("app.agents.ai_transformation_agent.deepseek.chat", fake_chat)
+
+    output = await agent.run(
+        {
+            "case_uid": "CASE2",
+            "alert": {"ticker": "NOC", "company_name": "Northrop"},
+            "validated_evidence": {
+                "by_hypothesis": {
+                    "ai": {
+                        "evidence": [
+                            {
+                                "reliability": "B",
+                                "title": "AI hiring ramp",
+                                "source_name": "example.com",
+                                "snippet": "Hiring for AI platform roles",
+                            }
+                        ]
+                    }
+                }
+            },
+            "source_context": {
+                "ai_search": {"data": [{"title": "AI launch", "url": "https://example.com"}]},
+                "jobs": {"data": [{"title": "ML role", "url": "https://example.com/jobs"}]},
+            },
+        }
+    )
+
+    assert output["score"] == 61
+    assert "AI hiring ramp" in captured["user_prompt"]

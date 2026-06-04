@@ -53,3 +53,22 @@ class BaseAgent(ABC):
                 "relevance": item.get("relevance", 0.5),
             })
         return formatted
+
+    def get_validated_bucket(self, case_data: Dict[str, Any], topic: str) -> list[dict]:
+        validated = case_data.get("validated_evidence", {})
+        return ((validated.get("by_hypothesis") or {}).get(topic, {}) or {}).get("evidence", []) or []
+
+    def get_source_context(self, case_data: Dict[str, Any], key: str) -> Dict[str, Any]:
+        return (case_data.get("source_context") or {}).get(key, {}) or {}
+
+    @staticmethod
+    def render_validated_items(items: list[dict], limit: int = 6) -> str:
+        if not items:
+            return "No validated evidence available."
+        lines = []
+        for item in items[:limit]:
+            lines.append(
+                f"- [{item.get('reliability', 'D')}] {item.get('title', '')} | "
+                f"{item.get('source_name', '')} | {item.get('snippet', '')[:180]}"
+            )
+        return "\n".join(lines)

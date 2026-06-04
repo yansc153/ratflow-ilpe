@@ -102,6 +102,7 @@ class ReportResponse(BaseModel):
     calibration_confidence: Optional[str] = None
     calibration_grade: Optional[str] = None
     event_probabilities_json: Optional[Dict[str, Any]] = None
+    research_evidence_json: Optional[Dict[str, Any]] = None
     trade_suggestion_json: Optional[Dict[str, Any]] = None
     report_markdown: Optional[str] = None
     discord_message_id: Optional[str] = None

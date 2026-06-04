@@ -15,7 +15,8 @@ class SECFilingsAgent(BaseAgent):
         try:
             alert = case_data.get("alert", {})
             ticker = alert.get("ticker", "")
-            recent_filings = await self.edgar.get_recent_filings(ticker, limit=8)
+            sec_ctx = self.get_source_context(case_data, "sec_filings")
+            recent_filings = sec_ctx.get("data", []) if sec_ctx else await self.edgar.get_recent_filings(ticker, limit=8)
             filings_block = self._format_recent_filings(recent_filings)
 
             user_prompt = f"""You are researching SEC filings for {ticker}.

@@ -18,16 +18,24 @@ class AITransformationAgent(BaseAgent):
             alert = case_data.get("alert", {})
             ticker = alert.get("ticker", "")
             company = alert.get("company_name", ticker)
-            site_ctx = await self.search.fetch(query=f'"{company}" AI product partnership investor relations careers', max_results=8)
-            jobs_ctx = await self.jobs.fetch(company=company)
+            validated_ai = self.get_validated_bucket(case_data, "ai")
+            site_ctx = self.get_source_context(case_data, "ai_search")
+            jobs_ctx = self.get_source_context(case_data, "jobs")
+            if not site_ctx:
+                site_ctx = await self.search.fetch(query=f'"{company}" AI product partnership investor relations careers', max_results=8)
+            if not jobs_ctx:
+                jobs_ctx = await self.jobs.fetch(company=company)
 
             user_prompt = f"""Research whether {company} ({ticker}) may be pivoting into AI or preparing AI-related announcements.
 
-Retrieved public web context:
-{site_ctx.get('data', [])}
+Validated AI evidence:
+{self.render_validated_items(validated_ai)}
 
 Retrieved jobs context:
 {jobs_ctx.get('data', [])}
+
+Retrieved public web context:
+{site_ctx.get('data', [])}
 
 Check public sources:
 - Company homepage and products page
@@ -65,6 +73,7 @@ If you cannot access actual data, return empty evidence with a note. Do not fabr
             output = self.base_output(case_data.get("case_uid", "unknown"))
             output.update({k: v for k, v in result.items() if k in output})
             output["retrieved_context"] = {
+                "validated_bucket": validated_ai,
                 "web": site_ctx.get("data", []),
                 "jobs": jobs_ctx.get("data", []),
             }

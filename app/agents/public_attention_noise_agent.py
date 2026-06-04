@@ -21,12 +21,24 @@ class PublicAttentionNoiseAgent(BaseAgent):
             alert = case_data.get("alert", {})
             ticker = alert.get("ticker", "")
             contract = case_data.get("normalized_contract", {})
-            market_ctx = await self.market.fetch(ticker=ticker)
-            news_ctx = await self.news.fetch(query=f"{ticker} stock news unusual options hype earnings", max_results=6)
-            social_ctx = await self.social.fetch(ticker=ticker)
-            price_ctx = await self.price.fetch(ticker=ticker)
+            validated_noise = self.get_validated_bucket(case_data, "noise")
+            market_ctx = self.get_source_context(case_data, "market")
+            news_ctx = self.get_source_context(case_data, "noise_search")
+            social_ctx = self.get_source_context(case_data, "social")
+            price_ctx = self.get_source_context(case_data, "price")
+            if not market_ctx:
+                market_ctx = await self.market.fetch(ticker=ticker)
+            if not news_ctx:
+                news_ctx = await self.news.fetch(query=f"{ticker} stock news unusual options hype earnings", max_results=6)
+            if not social_ctx:
+                social_ctx = await self.social.fetch(ticker=ticker)
+            if not price_ctx:
+                price_ctx = await self.price.fetch(ticker=ticker)
 
             user_prompt = f"""Act as the cold-water agent for unusual option activity in {ticker}.
+
+Validated noise evidence:
+{self.render_validated_items(validated_noise)}
 
 Retrieved market context:
 {market_ctx.get('data', {})}
@@ -77,6 +89,7 @@ If you cannot access real-time social data, estimate based on company characteri
             output = self.base_output(case_data.get("case_uid", "unknown"))
             output.update({k: v for k, v in result.items() if k in output})
             output["retrieved_context"] = {
+                "validated_bucket": validated_noise,
                 "market": market_ctx.get("data", {}),
                 "news": news_ctx.get("data", []),
                 "social": social_ctx.get("data", []),

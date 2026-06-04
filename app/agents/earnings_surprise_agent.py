@@ -19,12 +19,20 @@ class EarningsSurpriseAgent(BaseAgent):
             ticker = alert.get("ticker", "")
             company = alert.get("company_name", ticker)
             dte = case_data.get("normalized_contract", {}).get("dte", 0)
-            market_ctx = await self.market.fetch(ticker=ticker)
-            search_ctx = await self.search.fetch(query=f"{ticker} earnings guidance analyst estimate revisions", max_results=6)
+            validated_earnings = self.get_validated_bucket(case_data, "earnings")
+            market_ctx = self.get_source_context(case_data, "market")
+            search_ctx = self.get_source_context(case_data, "earnings_search")
+            if not market_ctx:
+                market_ctx = await self.market.fetch(ticker=ticker)
+            if not search_ctx:
+                search_ctx = await self.search.fetch(query=f"{ticker} earnings guidance analyst estimate revisions", max_results=6)
 
             user_prompt = f"""Research whether the unusual option activity for {company} ({ticker}) may be betting on an earnings surprise.
 
 DTE: {dte} days to expiration.
+
+Validated earnings evidence:
+{self.render_validated_items(validated_earnings)}
 
 Retrieved market context:
 {market_ctx.get('data', {})}
@@ -64,6 +72,7 @@ Do not fabricate."""
             output = self.base_output(case_data.get("case_uid", "unknown"))
             output.update({k: v for k, v in result.items() if k in output})
             output["retrieved_context"] = {
+                "validated_bucket": validated_earnings,
                 "market": market_ctx.get("data", {}),
                 "search": search_ctx.get("data", []),
             }

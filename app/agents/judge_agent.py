@@ -1,5 +1,6 @@
 from typing import Dict, Any, List
 from app.agents.base import BaseAgent
+from app.harness.evidence_pipeline import format_validated_summary
 from app.services.deepseek_client import deepseek
 from app.config import settings
 
@@ -37,6 +38,7 @@ class JudgeAgent(BaseAgent):
             hypothesis = case_data.get("event_hypothesis", {})
             noise = case_data.get("noise_agent", {})
             calibration_data = case_data.get("calibration_data", {})
+            validated = case_data.get("validated_evidence", {})
 
             user_prompt = f"""Fuse all evidence and output final judgment.
 
@@ -48,10 +50,15 @@ Key Findings: {dna.get('key_findings', [])}
 Red Flags: {dna.get('red_flags', [])}
 
 ## Event Hypothesis Prior
-{dna.get('event_hypothesis', {})}
+Event Probabilities: {hypothesis.get('event_probabilities', {})}
+Likely Horizon: {hypothesis.get('likely_horizon', 'unknown')}
+Reasoning: {hypothesis.get('summary', '')}
 
 ## Research Evidence Summary
 {self._summarize_agents(merged.get('agent_outputs', {}))}
+
+## Validated Evidence Bundle
+{format_validated_summary(validated)}
 
 ## Noise Assessment
 Noise Score: {noise.get('noise_score', 'N/A')}
