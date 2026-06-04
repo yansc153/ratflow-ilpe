@@ -199,10 +199,13 @@ class EvidenceValidator:
         for item in deduped:
             item["reliability"] = self._infer_reliability(item)
             item["reliability_score"] = self.RELIABILITY_SCORES[item["reliability"]]
+            primary_topic, secondary_topics = self._classify_topics(item)
+            item["primary_topic"] = primary_topic
+            item["secondary_topics"] = secondary_topics
 
         by_topic: Dict[str, Dict[str, Any]] = {}
         for topic in HYPOTHESIS_TOPICS:
-            topic_items = [item for item in deduped if topic in item.get("topic_tags", [])]
+            topic_items = [item for item in deduped if item.get("primary_topic") == topic]
             topic_items = sorted(
                 topic_items,
                 key=lambda item: (item.get("reliability_score", 0), len(item.get("snippet", ""))),
@@ -270,6 +273,45 @@ class EvidenceValidator:
         return "D"
 
     @staticmethod
+    def _classify_topics(item: Dict[str, Any]) -> tuple[str, List[str]]:
+        source_type = (item.get("source_type") or "").lower()
+        title = (item.get("title") or "").lower()
+        snippet = (item.get("snippet") or "").lower()
+        candidate_topics = list(item.get("topic_tags") or [])
+
+        if source_type == "sec_filing_index":
+            if "form 4" in title or "4 " in title:
+                return TOPIC_MA, [TOPIC_CONTRACT]
+            if "13d" in title or "13g" in title or "schedule to" in title or "tender" in title:
+                return TOPIC_MA, []
+            if "8-k" in title and any(token in snippet or token in title for token in ["award", "backlog", "contract", "customer"]):
+                return TOPIC_CONTRACT, [TOPIC_MA]
+            if "10-q" in title or "10-k" in title:
+                return TOPIC_EARNINGS, [TOPIC_CONTRACT]
+            return TOPIC_REGULATORY, []
+
+        if source_type in {"gov_contracts", "contract_search"}:
+            if "strategic" in snippet or "strategic" in title or "activist" in snippet or "tender" in snippet:
+                return TOPIC_MA, [TOPIC_CONTRACT]
+            return TOPIC_CONTRACT, []
+        if source_type in {"patents", "regulatory_search"}:
+            return TOPIC_REGULATORY, []
+        if source_type in {"social", "noise_search", "market_news"}:
+            return TOPIC_NOISE, [TOPIC_EARNINGS] if "earnings" in snippet else []
+        if source_type == "jobs":
+            return TOPIC_AI, []
+        if source_type == "ai_search":
+            return TOPIC_AI, [TOPIC_CONTRACT] if "partnership" in snippet else []
+        if source_type == "ma_search":
+            return TOPIC_MA, []
+        if source_type == "earnings_search":
+            return TOPIC_EARNINGS, []
+
+        if candidate_topics:
+            return candidate_topics[0], candidate_topics[1:]
+        return TOPIC_NOISE, []
+
+    @staticmethod
     def _summary(by_topic: Dict[str, Dict[str, Any]], missing_dimensions: List[str], conflicts: List[str]) -> str:
         topic_parts = [f"{topic}:{bucket['count']}" for topic, bucket in by_topic.items() if bucket["count"]]
         summary = " | ".join(topic_parts) if topic_parts else "no evidence collected"
@@ -328,7 +370,8 @@ def format_validated_bucket(validated: Dict[str, Any], topic: str, limit: int = 
     for item in evidence:
         lines.append(
             f"- [{item.get('reliability', 'D')}] {item.get('title', '')} | "
-            f"{item.get('source_name', '')} | {item.get('snippet', '')[:180]}"
+            f"{item.get('source_name', '')} | primary={item.get('primary_topic')} | "
+            f"{item.get('snippet', '')[:180]}"
         )
     return "\n".join(lines)
 

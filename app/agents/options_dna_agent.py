@@ -26,6 +26,7 @@ class OptionsDNAAgent(BaseAgent):
         volume = contract.get("volume", 0) or 0
         oi = contract.get("open_interest", 0) or 0
         ratio = contract.get("volume_oi_ratio") or 0
+        premium = contract.get("premium", 0) or 0
 
         if ratio < 1.0:
             findings.append("Volume/OI < 1.0: 无异常")
@@ -102,6 +103,19 @@ class OptionsDNAAgent(BaseAgent):
             elif spread_pct > 0.35:
                 score -= 10
                 red_flags.append(f"Bid/Ask spread={spread_pct:.0%}: 较差 (-10)")
+            elif spread_pct <= 0.20:
+                score += 5
+                findings.append(f"Bid/Ask spread={spread_pct:.0%}: 流动性较好 (+5)")
+
+        if premium >= 1_000_000:
+            score += 10
+            findings.append(f"Premium=${premium:,.0f}: 大额权利金 (+10)")
+        elif premium >= 250_000:
+            score += 6
+            findings.append(f"Premium=${premium:,.0f}: 较大权利金 (+6)")
+        elif premium >= 75_000:
+            score += 3
+            findings.append(f"Premium=${premium:,.0f}: 有意义权利金 (+3)")
 
         score = max(0, min(100, score))
 

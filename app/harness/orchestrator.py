@@ -386,8 +386,11 @@ class HarnessOrchestrator:
         }
 
     def _build_agent_audit_rows(self, case) -> list[dict]:
+        runs = case.agent_runs
+        if not runs:
+            runs = self.db.query(AgentRun).filter(AgentRun.case_id == case.id).order_by(AgentRun.id).all()
         rows = []
-        for run in case.agent_runs:
+        for run in runs:
             output = run.output_json if isinstance(run.output_json, dict) else {}
             positive = len(output.get("positive_evidence") or output.get("all_positive_evidence") or [])
             negative = len(output.get("negative_evidence") or [])

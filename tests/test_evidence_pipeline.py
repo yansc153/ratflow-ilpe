@@ -84,9 +84,11 @@ def test_evidence_validator_dedupes_and_buckets():
 
     assert validated["deduped_count"] == 2
     assert validated["by_hypothesis"]["ma"]["count"] == 1
-    assert validated["by_hypothesis"]["contract"]["count"] == 1
+    assert validated["by_hypothesis"]["contract"]["count"] == 0
     assert validated["by_hypothesis"]["noise"]["evidence"][0]["reliability"] == "D"
     assert "missing_jobs" in validated["missing_dimensions"]
+    assert validated["all_evidence"][0]["primary_topic"] == "ma"
+    assert validated["all_evidence"][0]["secondary_topics"] == ["contract"]
 
 
 def test_hypothesis_router_selects_sec_noise_and_top_topics():

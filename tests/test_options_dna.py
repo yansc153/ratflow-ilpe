@@ -39,6 +39,26 @@ def test_options_dna_low_score():
     assert result["options_dna_score"] < 40
 
 
+def test_options_dna_borderline_case_is_not_auto_rejected():
+    agent = OptionsDNAAgent()
+    result = agent._score({}, {
+        "volume": 3000,
+        "open_interest": 1300,
+        "volume_oi_ratio": 2.3,
+        "dte": 21,
+        "otm_pct": 62.0,
+        "iv_change": 0.04,
+        "underlying_move_5d": 0.08,
+        "bid": 1.2,
+        "ask": 1.4,
+        "mid_price": 1.3,
+        "premium": 390000,
+        "direction": "bullish",
+    })
+    assert result["options_dna_score"] >= 40
+    assert result["research_priority"] in ("light", "full", "urgent")
+
+
 def test_options_dna_clamped():
     agent = OptionsDNAAgent()
     result = agent._score({}, {
