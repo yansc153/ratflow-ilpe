@@ -1,28 +1,25 @@
-🐀 RATFLOW 老鼠仓嫌疑报告
+🐀 **RATFLOW 异动情报卡**
 
-**Case:** {{ case_uid }}
-**Ticker:** {{ ticker }}
-**方向:** {{ direction_label }}
-**原单:** {{ original_contract_label }}
+**🎫 Case** `{{ case_uid }}`
+**📌 Ticker** `{{ ticker }}`
+**📈 方向** {{ direction_label }}
+**🎯 原单** {{ original_contract_label }}
 
-**价格:**
-Bid: {{ bid }} | Ask: {{ ask }} | Mid: {{ mid }} | Last: {{ last }}
-IV: {{ iv }} | DTE: {{ dte }} | Premium: ${{ premium }}
+**🧭 一句话判断**
+Leakage `{{ leakage_score }}/100` | Tradeability `{{ tradeability_score }}/100` | Follow-through `{{ profit_probability }}%`
 
-**期权结构:**
-Volume/OI: {{ volume }}/{{ open_interest }} = {{ volume_oi_ratio }}
-Options DNA Score: {{ options_dna_score }}/100
-DNA Route: {{ dna_route }}
-Anomaly / Contract / Convexity: {{ anomaly_score }} / {{ contract_quality_score }} / {{ convexity_score }}
-Contract Quality: {{ contract_quality }}
+**🧬 DNA 门禁**
+- Route: `{{ dna_route }}`
+- DNA 总分: `{{ options_dna_score }}/100`
+- 异常 / 合约 / 凸性: `{{ anomaly_score }} / {{ contract_quality_score }} / {{ convexity_score }}`
+- 合约质量: `{{ contract_quality }}`
 
-**总评分:**
-Leakage Score: {{ leakage_score }}/100
-Tradeability Score: {{ tradeability_score }}/100
-Model-Estimated Follow-Through Probability: {{ profit_probability }}%
-Calibration: {{ calibration_grade }} / {{ calibration_confidence }}
+**💰 合约快照**
+- Bid / Ask / Mid / Last: `{{ bid }} / {{ ask }} / {{ mid }} / {{ last }}`
+- IV / DTE / Premium: `{{ iv }} / {{ dte }} / ${{ premium }}`
+- Volume / OI: `{{ volume }} / {{ open_interest }} = {{ volume_oi_ratio }}`
 
-**最可能事件:**
+**🎲 最可能事件**
 - AI转型: {{ p_ai }}%
 - 被收购/战略交易: {{ p_ma }}%
 - 重大合同/政府订单: {{ p_contract }}%
@@ -32,35 +29,38 @@ Calibration: {{ calibration_grade }} / {{ calibration_confidence }}
 - 散户/对冲/Gamma噪音: {{ p_noise }}%
 - 其他: {{ p_other }}%
 
-**为什么可疑:**
+**🚨 为什么进 radar**
 {% for item in why_suspicious %}
 - {{ item }}
 {% endfor %}
 
-**调研审计:**
+**🧪 调研审计**
 {% for item in agent_audit %}
-- {{ item.label }}: {{ item.score }} 分 | 正证 {{ item.positive_count }} | 反证 {{ item.negative_count }} | {{ item.summary }}
+- {{ item.label }} | 分数 {{ item.score }} | 正证 {{ item.positive_count }} / 反证 {{ item.negative_count }}
+  {{ item.summary }}
 {% endfor %}
 
-**Evidence 路由:**
+**🛣️ Evidence 路由**
 {% for item in hypothesis_route %}
 - {{ item }}
 {% endfor %}
 
-**Validated Evidence 总结:**
-{{ validated_summary }}
-
-**缺失维度:**
+**📦 Validated Evidence**
+- 总结: {{ validated_summary }}
+{% if validated_missing_dimensions %}
+- 缺失维度:
 {% for item in validated_missing_dimensions %}
-- {{ item }}
+  - {{ item }}
 {% endfor %}
-
-**冲突标记:**
+{% endif %}
+{% if validated_conflicts %}
+- 冲突标记:
 {% for item in validated_conflicts %}
-- {{ item }}
+  - {{ item }}
 {% endfor %}
+{% endif %}
 
-**Hypothesis Buckets:**
+**🧩 Hypothesis Buckets**
 {% for bucket in hypothesis_buckets %}
 - {{ bucket.topic }} | {{ bucket.count }} 条 | Sources: {{ bucket.sources|join(', ') }}
 {% for title in bucket.sample_titles %}
@@ -68,39 +68,39 @@ Calibration: {{ calibration_grade }} / {{ calibration_confidence }}
 {% endfor %}
 {% endfor %}
 
-**公开证据:**
+**✅ 公开证据**
 {% for item in positive_evidence %}
 - [{{ item.quality }}] {{ item.title }}
-  Source: {{ item.source_name }}{% if item.url %} ({{ item.url }}){% endif %}
+  {{ item.source_name }}{% if item.url %} · {{ item.url }}{% endif %}
   {{ item.snippet }}
 {% endfor %}
 
-**反证/噪音:**
+**⚠️ 反证 / 噪音**
 {% for item in negative_evidence %}
 - {{ item }}
 {% endfor %}
 
-**交易建议:**
-Action: {{ primary_action }}
-原单建议: {{ original_contract_trade }}
-替代方案: {{ alternative_contract_trade }}
-仓位: {{ position_size }}
-最大亏损: 权利金
+**🪙 交易建议**
+- Action: {{ primary_action }}
+- 原单建议: {{ original_contract_trade }}
+- 替代方案: {{ alternative_contract_trade }}
+- 仓位: {{ position_size }}
+- 最大亏损: 权利金
 
-**止盈思路:**
+**🎯 止盈思路**
 {% for item in take_profit_plan %}
 - {{ item }}
 {% endfor %}
 
-**失效条件:**
+**🧱 失效条件**
 {% for item in invalidation %}
 - {{ item }}
 {% endfor %}
 
-**下一步:**
-等待次日 OI confirmation。
-若 OI confirmation ratio > 50%，系统升级评分。
-若 OI 不确认，系统降级。
+**⏭️ 下一步**
+- 等待次日 OI confirmation
+- 若 OI confirmation ratio > 50%，系统升级评分
+- 若 OI 不确认，系统降级
 
-**备注:**
+**📝 备注**
 这是基于公开数据的概率化研究报告，不是投资建议，也不代表确认存在内幕交易。
